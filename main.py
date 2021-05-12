@@ -68,7 +68,7 @@ class InstallError(Exception):
         self.reason = reason
 
 
-def app_install_local(serial: str, apk_path: str, launch: bool = False) -> str:
+def app_install_local(serial: str, apk_path: str, launch: bool = False, uninstall: bool = True) -> str:
     """
     install apk to device
 
@@ -85,12 +85,13 @@ def app_install_local(serial: str, apk_path: str, launch: bool = False) -> str:
     except apkutils.apkfile.BadZipFile:
         raise InstallError("ApkParse", "Bad zip file")
 
-    # 提前将重名包卸载
-    package_name = apk.manifest.package_name
-    pkginfo = device.package_info(package_name)
-    if pkginfo:
-        logger.debug("uninstall: %s", package_name)
-        device.uninstall(package_name)
+    if uninstall:
+        # 提前将重名包卸载
+        package_name = apk.manifest.package_name
+        pkginfo = device.package_info(package_name)
+        if pkginfo:
+            logger.debug("uninstall: %s", package_name)
+            device.uninstall(package_name)
 
     # 解锁手机，防止锁屏
     # ud = u2.connect_usb(serial)
@@ -172,12 +173,15 @@ class AppHandler(CorsMixin, tornado.web.RequestHandler):
         url = self.get_argument("url")
         launch = self.get_argument("launch",
                                    "false") in ['true', 'True', 'TRUE', '1']
+        uninstall = self.get_argument("uninstall",
+                                   "true") in ['true', 'True', 'TRUE', '1']
 
         try:
             apk_path = await self.cache_download(url)
             ret = await self.app_install_url(device.serial,
                                              apk_path,
-                                             launch=launch)
+                                             launch=launch,
+                                             uninstall=uninstall)
             self.write(ret)
         except InstallError as e:
             self.set_status(400)
